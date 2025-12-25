@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pandas
+scikit-learn
+beautifulsoup4
+playwright
+spacy
+pymongo
+requests
+python-multipart
+pydantic
+pypdf
