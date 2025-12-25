@@ -1,0 +1,9 @@
+cat <<EOT > .gitignore
+node_modules/
+.next/
+.env*
+*.log
+*.node
+jj/
+backend-core/target/
+EOT
