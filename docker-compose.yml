@@ -1,44 +1,37 @@
-version: '3.8'
-
 services:
-  # MongoDB Database
+  frontend:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      - backend-core
+      - ai-services
+
+  backend-core:
+    build:
+      context: ./backend-core
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongodb
+
+  ai-services:
+    build:
+      context: ./ai-services
+    ports:
+      - "8000:8000"
+
   mongodb:
     image: mongo:latest
     ports:
       - "27017:27017"
     volumes:
-      - mongodb_data:/data/db
-
-  # Java Core API Service
-  backend-core:
-    build: ./backend-core
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/jobjugaad
-      - PYTHON_SERVICE_URL=http://ai-services:8000
-    depends_on:
-      - mongodb
-
-  # Python AI Services
-  ai-services:
-    build: ./ai-services
-    ports:
-      - "8000:8000"
-    environment:
-      - MONGO_URI=mongodb://mongodb:27017/jobjugaad
-    depends_on:
-      - mongodb
-
-  # Next.js Frontend
-  frontend:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
-    depends_on:
-      - backend-core
+      - mongo_data:/data/db
 
 volumes:
-  mongodb_data:
+  mongo_data:
