@@ -11,12 +11,12 @@ import {
   ChevronUp, 
   ChevronDown,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
 
 interface Job {
   id: string;
@@ -24,9 +24,11 @@ interface Job {
   company: string;
   location: string;
   description: string;
-  salary_min: number;
-  salary_max: number;
+  salary_min: number | null;
+  salary_max: number | null;
   apply_link: string;
+  posted_at: string;
+  source?: string;
 }
 
 export default function FeedPage() {
@@ -34,44 +36,57 @@ export default function FeedPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [indiaOnly, setIndiaOnly] = useState(true);
-  const [recentOnly, setRecentOnly] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const lastWheelEventRef = useRef(0);
 
   useEffect(() => {
-    fetchJobs();
+    fetchJobs(false);
   }, []);
 
-  const fetchJobs = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('posted_at', { ascending: false });
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      fetchJobs(false);
+    }, 60000);
 
-      if (error) throw error;
-      
-      if (data) {
-        setJobs(data as Job[]);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const fetchJobs = async (refresh = false) => {
+    try {
+      if (refresh) setRefreshing(true);
+
+      const response = await fetch(`/api/jobs/fresher-feed?days=2&limit=80${refresh ? "&refresh=1" : ""}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Unable to load fresher reels.");
       }
+
+      setJobs((payload.jobs || []) as Job[]);
     } catch (err) {
       console.error("Failed to fetch jobs", err);
       toast.error("Failed to load jobs. Please try again later.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const filteredJobs = jobs.filter(job => {
     const isIndia = job.location?.toLowerCase().includes('india') || job.location?.toLowerCase().includes('remote');
     const matchesIndia = !indiaOnly || isIndia;
-
-    const postDate = new Date((job as any).posted_at || (job as any).created_at);
-    const fourDaysAgo = new Date();
-    fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
-    const isRecent = postDate >= fourDaysAgo;
-    const matchesRecent = !recentOnly || isRecent;
-
-    return matchesIndia && matchesRecent;
+    return matchesIndia;
   });
+
+  const currentJob = filteredJobs[currentIndex];
+
+  useEffect(() => {
+    if (currentIndex > Math.max(filteredJobs.length - 1, 0)) {
+      setCurrentIndex(0);
+    }
+  }, [currentIndex, filteredJobs.length]);
 
   const nextJob = () => {
     if (currentIndex < filteredJobs.length - 1) {
@@ -87,6 +102,53 @@ export default function FeedPage() {
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowDown") nextJob();
+      if (event.key === "ArrowUp") prevJob();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentIndex, filteredJobs.length]);
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const now = Date.now();
+    if (now - lastWheelEventRef.current < 500) return;
+
+    if (Math.abs(event.deltaY) < 10) return;
+
+    lastWheelEventRef.current = now;
+    if (event.deltaY > 0) {
+      nextJob();
+    } else {
+      prevJob();
+    }
+  };
+
+  const openApplyLink = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleShare = async () => {
+    if (!currentJob) return;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `${currentJob.title} at ${currentJob.company}`,
+          text: `Fresher role: ${currentJob.title} at ${currentJob.company}`,
+          url: currentJob.apply_link,
+        });
+      } else {
+        await navigator.clipboard.writeText(currentJob.apply_link);
+        toast.success("Application link copied.");
+      }
+    } catch {
+      toast.error("Could not share this job right now.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950 text-white">
@@ -99,8 +161,15 @@ export default function FeedPage() {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-zinc-950 text-white gap-4">
         <h2 className="text-2xl font-bold">No jobs found</h2>
+        <p className="text-zinc-400 text-center max-w-sm">Try broadening the India filter or refresh the feed to pull the latest fresher jobs from the last 48 hours.</p>
         <div className="flex gap-4">
-          <Button variant="outline" onClick={() => window.open(filteredJobs[currentIndex].apply_link, "_blank", "noopener,noreferrer")}>Reset Filters</Button>
+          <Button variant="outline" onClick={() => { setIndiaOnly(false); setCurrentIndex(0); }}>
+            Reset Filters
+          </Button>
+          <Button variant="outline" onClick={() => fetchJobs(true)} disabled={refreshing}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh Feed
+          </Button>
           <Button onClick={() => window.location.href = "/"}>Back to Home</Button>
         </div>
       </div>
@@ -108,7 +177,7 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="h-screen w-full bg-zinc-950 overflow-hidden relative font-sans">
+    <div className="h-screen w-full bg-zinc-950 overflow-hidden relative font-sans" onWheel={handleWheel}>
       {/* Background Glow */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-[20%] left-[10%] h-[400px] w-[400px] rounded-full bg-primary/20 blur-[120px]" />
@@ -126,12 +195,14 @@ export default function FeedPage() {
           🇮🇳 India
         </Button>
         <Button 
-          variant={recentOnly ? "default" : "outline"} 
+          variant="outline" 
           size="sm" 
           className="rounded-full bg-zinc-900/50 border-white/20 text-white"
-          onClick={() => { setRecentOnly(!recentOnly); setCurrentIndex(0); }}
+          onClick={() => fetchJobs(true)}
+          disabled={refreshing}
         >
-          🕒 Last 4 Days
+          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh 48-Hour Feed
         </Button>
       </div>
 
@@ -178,18 +249,23 @@ export default function FeedPage() {
                   <Badge className="bg-primary hover:bg-primary/90 text-white px-3 py-1">
                     Fresher Role
                   </Badge>
-                  {new Date((filteredJobs[currentIndex] as any).posted_at) >= new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) && (
+                  {new Date(currentJob.posted_at) >= new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) && (
                     <Badge className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1">
                       New
                     </Badge>
                   )}
+                  {currentJob.source && (
+                    <Badge variant="outline" className="border-white/20 bg-white/10 capitalize text-white">
+                      {currentJob.source}
+                    </Badge>
+                  )}
                 </div>
                 <h2 className="text-4xl font-extrabold text-white tracking-tight mb-2">
-                  {filteredJobs[currentIndex].title}
+                  {currentJob.title}
                 </h2>
                 <div className="flex items-center gap-2 text-zinc-300 font-medium text-lg">
                   <Briefcase className="h-5 w-5 text-primary" />
-                  {filteredJobs[currentIndex].company}
+                  {currentJob.company}
                 </div>
               </motion.div>
 
@@ -200,10 +276,13 @@ export default function FeedPage() {
                 className="flex flex-wrap gap-3"
               >
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm border border-white/10">
-                  <MapPin className="h-4 w-4" /> {filteredJobs[currentIndex].location}
+                  <MapPin className="h-4 w-4" /> {currentJob.location}
                 </div>
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm border border-white/10">
-                    <DollarSign className="h-4 w-4" /> {filteredJobs[currentIndex].salary_min ? `₹${(filteredJobs[currentIndex].salary_min / 100000).toFixed(1)}L+` : 'Competitive Pay'}
+                    <DollarSign className="h-4 w-4" /> {currentJob.salary_min ? `₹${(currentJob.salary_min / 100000).toFixed(1)}L+` : 'Competitive Pay'}
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm border border-white/10">
+                    Posted {new Date(currentJob.posted_at).toLocaleDateString()}
                   </div>
                 </motion.div>
 
@@ -213,7 +292,7 @@ export default function FeedPage() {
                   transition={{ delay: 0.4 }}
                   className="text-zinc-400 text-sm line-clamp-3 leading-relaxed"
                 >
-                  {filteredJobs[currentIndex].description}
+                  {currentJob.description}
                 </motion.p>
 
                 <motion.div 
@@ -224,7 +303,7 @@ export default function FeedPage() {
                 >
                   <Button 
                     className="flex-1 h-14 rounded-2xl text-lg font-bold shadow-lg"
-                    onClick={() => window.parent.postMessage({ type: "OPEN_EXTERNAL_URL", data: { url: filteredJobs[currentIndex].apply_link } }, "*")}
+                    onClick={() => openApplyLink(currentJob.apply_link)}
                   >
                     Apply Now <ExternalLink className="ml-2 h-5 w-5" />
                   </Button>
@@ -233,6 +312,7 @@ export default function FeedPage() {
                   variant="outline" 
                   size="icon" 
                   className="h-14 w-14 rounded-2xl border-white/20 bg-white/10 hover:bg-white/20 text-white"
+                  onClick={() => openApplyLink(currentJob.apply_link)}
                 >
                   <Heart className="h-6 w-6" />
                 </Button>
@@ -240,6 +320,7 @@ export default function FeedPage() {
                   variant="outline" 
                   size="icon" 
                   className="h-14 w-14 rounded-2xl border-white/20 bg-white/10 hover:bg-white/20 text-white"
+                  onClick={handleShare}
                 >
                   <Share2 className="h-6 w-6" />
                 </Button>
@@ -261,6 +342,7 @@ export default function FeedPage() {
         <h1 className="text-white text-2xl font-bold flex items-center gap-2">
           <Sparkles className="text-primary h-6 w-6" /> Job Reels
         </h1>
+        <p className="mt-2 text-sm text-zinc-400">Scroll or use arrow keys to move through live fresher jobs.</p>
       </div>
 
       {/* Back Button */}

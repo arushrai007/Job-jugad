@@ -17,21 +17,9 @@ services:
       context: ./backend-core
     ports:
       - "8080:8080"
-    depends_on:
-      - mongodb
 
   ai-services:
     build:
       context: ./ai-services
     ports:
       - "8000:8000"
-
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-volumes:
-  mongo_data:

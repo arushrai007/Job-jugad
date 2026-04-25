@@ -1,0 +1,6 @@
+{
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/api/jobs/fresher-feed/route": "app/api/jobs/fresher-feed/route.js",
+  "/page": "app/page.js",
+  "/jobs/page": "app/jobs/page.js"
+}

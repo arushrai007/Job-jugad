@@ -1,71 +1,75 @@
-# Job Jugaad:Fresher-First AI Job Platform
-Made changes for git
-Job Jugaad is a production-ready, microservices-based platform designed exclusively for freshers (0-2 years experience). It leverages Java for core business logic, Python for AI/ML/Scraping, and Next.js for a high-performance interactive frontend.
+# Job Jugaad
 
-## 🚀 Key Features
+Job Jugaad now includes a Supabase-backed fresher job aggregation pipeline:
 
-- **Vertical Job Feed (Reels)**: Discover jobs with an Instagram-style vertical scroll.
-- **AI Resume Matcher**: NLP-powered analysis of resumes against job descriptions.
-- **Salary Predictor**: ML model to estimate fresher packages based on role, location, and skills.
-- **Fresher-Only Filtering**: Real-time scraping optimized strictly for entry-level and internship roles.
-- **Core API Gateway**: Centralized Java Spring Boot backend for auth, tracking, and profile management.
+- Pulls structured listings from Adzuna and Jooble.
+- Optionally scrapes safer company career pages with `requests` + BeautifulSoup, or Selenium for dynamic pages.
+- Filters for fresher-style roles using keywords like `fresher`, `entry level`, and `0-1 years`.
+- Keeps only recent jobs from the last 24-48 hours.
+- Deduplicates on `title + company`.
+- Upserts cleaned jobs into Supabase table `jobs`.
+- Serves the website feed from Supabase so the UI only reads already-cleaned data.
 
-## 🏗️ Architecture
+## Pipeline Overview
 
-- **Frontend**: Next.js 15, Framer Motion, Tailwind CSS, Shadcn/UI.
-- **Backend Core**: Java 17, Spring Boot, Spring Security (JWT), MongoDB.
-- **AI Services**: Python 3.9, FastAPI, Spacy (NLP), Scikit-Learn (ML), Playwright/BS4 (Scraping).
-- **Database**: MongoDB (NoSQL) for high-velocity job data and user engagement.
+1. Python FastAPI service runs the sync pipeline.
+2. A background scheduler runs it every `JOB_SYNC_INTERVAL_HOURS` hours.
+3. The website can also trigger a manual refresh through `GET /api/jobs/sync`.
+4. The frontend feed reads from Supabase through `GET /api/jobs/fresher-feed`.
 
-## 📁 Project Structure
+## Supabase Setup
 
-```text
-job-jugaad/
-├── ai-services/           # Python AI/ML/Scraper Services
-│   ├── main.py            # FastAPI Entry Point
-│   ├── matcher.py         # NLP Resume Matching logic
-│   ├── scraper.py         # Real-time Job Scraping logic
-│   └── salary_model.py    # ML Salary Prediction logic
-├── backend-core/          # Java Spring Boot Core Service
-│   ├── src/main/java/...  # Models, Controllers, Services
-│   └── pom.xml            # Maven Configuration
-├── src/                   # Next.js Frontend (App Router)
-│   ├── app/               # Pages (Feed, Salary, Resume)
-│   └── components/        # UI Components
-├── docker-compose.yml     # Microservices Orchestration
-└── Dockerfile             # Frontend Containerization
+Run the SQL in [supabase/jobs.sql](/home/arush/Desktop/Job-jugad/supabase/jobs.sql) in your new Supabase project.
+
+Required environment variables are listed in [.env.example](/home/arush/Desktop/Job-jugad/.env.example).
+
+Important values:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ADZUNA_APP_ID`
+- `ADZUNA_APP_KEY`
+- `JOOBLE_API_KEY`
+
+## Company Career Page Config
+
+Use `COMPANY_CAREER_PAGES` as a JSON array. Example:
+
+```json
+[
+  {
+    "source": "acme",
+    "mode": "static",
+    "company": "Acme",
+    "url": "https://acme.com/careers",
+    "item_selector": ".job-card",
+    "title_selector": "h2",
+    "link_selector": "a",
+    "date_selector": "time",
+    "location_selector": ".location",
+    "description_selector": ".summary"
+  }
+]
 ```
 
-## 🛠️ Setup & Usage
+For dynamic sites, set `"mode": "dynamic"` and keep the same selector fields.
 
-### Prerequisites
-- Docker & Docker Compose installed.
+## Local Run
 
-### One-Command Start
-Run the following command in the root directory:
 ```bash
 docker-compose up --build
 ```
 
-This will start:
-1. **MongoDB** at `localhost:27017`
-2. **AI Services (Python)** at `localhost:8000`
-3. **Core API (Java)** at `localhost:8080`
-4. **Frontend (Next.js)** at `localhost:3000`
+Services:
 
-### API Endpoints
-- **Job Feed**: `GET /api/jobs/fresher-feed` (via Java Core)
-- **Scrape Trigger**: `GET /jobs/scrape` (via Python AI)
-- **Resume Match**: `POST /resume/match` (via Python AI)
-- **Salary Predict**: `POST /salary/predict` (via Python AI)
+- Frontend: `http://localhost:3000`
+- AI services: `http://localhost:8000`
+- Core backend: `http://localhost:8080`
 
-## 🔒 Security
-- JWT-based authentication implemented in the Java Core Service.
-- Rate limiting and ethical scraping delays enforced in the Python Scraper.
-- MongoDB data volume persistence configured for production safety.
+## Job Endpoints
 
-## 🎨 UI/UX Highlights
-- Mobile-first responsive design.
-- Parallax hero sections and smooth staggered animations.
-- TikTok-style vertical job discovery.
-- Dark/Light theme support.
+- `GET /api/jobs/fresher-feed`
+- `GET /api/jobs/sync`
+- `POST http://localhost:8000/jobs/sync`
+- `GET http://localhost:8000/jobs/scrape`

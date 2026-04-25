@@ -1,12 +1,14 @@
 fastapi
 uvicorn
+apscheduler
 pandas
 scikit-learn
 beautifulsoup4
 playwright
+selenium
 spacy
-pymongo
 requests
+webdriver-manager
 python-multipart
 pydantic
 pypdf

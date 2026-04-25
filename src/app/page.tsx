@@ -151,7 +151,7 @@ export default function LandingPage() {
             transition={{ delay: 0.2 }}
             className="mx-auto max-w-4xl text-5xl font-extrabold tracking-tight md:text-7xl lg:text-8xl"
           >
-            GET Your First Job with <span className="text-primary">AI Jugaad</span>
+            Land Your First Job with <span className="text-primary">AI Jugaad</span>
           </motion.h1>
 
           <motion.p 

@@ -1,15 +1,23 @@
 package com.jobjugaad.core.model;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Data;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.util.Date;
+import java.util.UUID;
 
 @Data
-@Document(collection = "applications")
+@Entity
+@Table(name = "applications")
 public class Application {
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
     private String jobId;
     private String userEmail;
     private String status; // APPLIED, UNDER_REVIEW, REJECTED, ACCEPTED

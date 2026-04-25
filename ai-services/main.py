@@ -1,15 +1,31 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
+import logging
+import os
+from contextlib import asynccontextmanager
 from typing import List, Optional
+
 import uvicorn
-import scraper
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from pydantic import BaseModel
+
 import matcher
 import salary_engine
 import io
-import os
 from pypdf import PdfReader
 
-app = FastAPI(title="Job Jugaad AI Services")
+from job_pipeline import run_job_pipeline
+from job_scheduler import start_scheduler, stop_scheduler
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if os.getenv("JOB_SCHEDULER_ENABLED", "true").lower() == "true":
+        start_scheduler()
+    yield
+    stop_scheduler()
+
+app = FastAPI(title="Job Jugaad AI Services", lifespan=lifespan)
 
 class JobMatchRequest(BaseModel):
     resume_text: str
@@ -46,9 +62,14 @@ async def extract_text(file: UploadFile = File(...)):
 
 @app.get("/jobs/scrape")
 async def trigger_scrape():
-    # Ethical scraping logic for LinkedIn/Indeed/Wellfound
-    jobs = scraper.scrape_fresher_jobs()
-    return {"status": "success", "jobs_found": len(jobs), "data": jobs}
+    result = run_job_pipeline()
+    return {"status": "success", **result}
+
+
+@app.post("/jobs/sync")
+async def sync_jobs():
+    result = run_job_pipeline()
+    return {"status": "success", **result}
 
 @app.post("/resume/match")
 async def match_resume(request: JobMatchRequest):

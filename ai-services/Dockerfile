@@ -7,6 +7,8 @@ WORKDIR /app
 # Install system dependencies for spacy/playwright
 RUN apt-get update && apt-get install -y \
     build-essential \
+    chromium \
+    chromium-driver \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
